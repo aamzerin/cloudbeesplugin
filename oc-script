@@ -17,22 +17,22 @@ json_array="["
 # Get all namespaces
 namespaces=$(oc get namespaces -o jsonpath="{.items[*].metadata.name}")
 
-echo "NAMESPACE | PODS | ROUTES | USERS"
-echo "---------------------------------"
-
 # Iterate over each namespace
 for namespace in $namespaces
 do
+    # Skip namespaces that start with 'openshift'
+    if [[ $namespace == openshift* ]]; then
+        continue
+    fi
+
     # Get pods in namespace
-    pods=$(oc get pods -n $namespace -o jsonpath="{.items[*].metadata.name}" | wc -w)
+    pods=$(oc get pods -n $namespace -o jsonpath="{.items[*].metadata.name}" | tr ' ' '\n' | jq -R . | jq -s .)
 
     # Get routes in namespace
-    routes=$(oc get routes -n $namespace -o jsonpath="{.items[*].metadata.name}" | wc -w)
+    routes=$(oc get routes -n $namespace -o jsonpath="{.items[*].metadata.name}" | tr ' ' '\n' | jq -R . | jq -s .)
 
     # Get users associated with namespace
-    users=$(oc get rolebindings -n $namespace -o jsonpath="{.items[*].subjects[*].name}" | tr ' ' '\n' | sort -u | wc -w)
-
-    echo "$namespace | $pods | $routes | $users"
+    users=$(oc get rolebindings -n $namespace -o jsonpath="{.items[*].subjects[*].name}" | tr ' ' '\n' | sort -u | jq -R . | jq -s .)
 
     # Append data to JSON array
     json_entry="{\"namespace\":\"$namespace\",\"pods\":$pods,\"routes\":$routes,\"users\":$users}"
