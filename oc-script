@@ -1,0 +1,49 @@
+#!/bin/bash
+
+# Ensure that the oc command is available
+if ! command -v oc &> /dev/null
+then
+    echo "oc command could not be found, please install OpenShift CLI"
+    exit
+elif ! oc status &> /dev/null
+then
+    echo "You are not logged into any OpenShift cluster."
+    exit
+fi
+
+# Initialize JSON array
+json_array="["
+
+# Get all namespaces
+namespaces=$(oc get namespaces -o jsonpath="{.items[*].metadata.name}")
+
+echo "NAMESPACE | PODS | ROUTES | USERS"
+echo "---------------------------------"
+
+# Iterate over each namespace
+for namespace in $namespaces
+do
+    # Get pods in namespace
+    pods=$(oc get pods -n $namespace -o jsonpath="{.items[*].metadata.name}" | wc -w)
+
+    # Get routes in namespace
+    routes=$(oc get routes -n $namespace -o jsonpath="{.items[*].metadata.name}" | wc -w)
+
+    # Get users associated with namespace
+    users=$(oc get rolebindings -n $namespace -o jsonpath="{.items[*].subjects[*].name}" | tr ' ' '\n' | sort -u | wc -w)
+
+    echo "$namespace | $pods | $routes | $users"
+
+    # Append data to JSON array
+    json_entry="{\"namespace\":\"$namespace\",\"pods\":$pods,\"routes\":$routes,\"users\":$users}"
+    json_array+="$json_entry,"
+
+done
+
+# Remove last comma and close JSON array
+json_array=$(echo "$json_array" | sed 's/,$//')
+json_array+="]"
+
+# Print JSON array
+echo "JSON Array:"
+echo "$json_array"
