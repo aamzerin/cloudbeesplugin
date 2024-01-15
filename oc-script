@@ -25,17 +25,17 @@ do
         continue
     fi
 
-    # Get pods in namespace
-    pods=$(oc get pods -n $namespace -o jsonpath="{.items[*].metadata.name}" | tr ' ' '\n' | jq -R . | jq -s .)
+    # Get pods in namespace and format as JSON array
+    pods=$(oc get pods -n $namespace -o jsonpath="{.items[*].metadata.name}" | tr ' ' '\n' | sed '/^$/d' | sed 's/.*/"&"/' | paste -sd, -)
 
-    # Get routes in namespace
-    routes=$(oc get routes -n $namespace -o jsonpath="{.items[*].metadata.name}" | tr ' ' '\n' | jq -R . | jq -s .)
+    # Get routes in namespace and format as JSON array
+    routes=$(oc get routes -n $namespace -o jsonpath="{.items[*].metadata.name}" | tr ' ' '\n' | sed '/^$/d' | sed 's/.*/"&"/' | paste -sd, -)
 
-    # Get users associated with namespace
-    users=$(oc get rolebindings -n $namespace -o jsonpath="{.items[*].subjects[*].name}" | tr ' ' '\n' | sort -u | jq -R . | jq -s .)
+    # Get users associated with namespace and format as JSON array
+    users=$(oc get rolebindings -n $namespace -o jsonpath="{.items[*].subjects[*].name}" | tr ' ' '\n' | sort -u | sed '/^$/d' | sed 's/.*/"&"/' | paste -sd, -)
 
     # Append data to JSON array
-    json_entry="{\"namespace\":\"$namespace\",\"pods\":$pods,\"routes\":$routes,\"users\":$users}"
+    json_entry="{\"namespace\":\"$namespace\",\"pods\":[$pods],\"routes\":[$routes],\"users\":[$users]}"
     json_array+="$json_entry,"
 
 done
