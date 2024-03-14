@@ -3,18 +3,52 @@
 # Define variables
 ENDPOINT_URL="https://your-s3-compatible-service-endpoint"
 BUCKET_NAME="your-bucket-name"
-FILE_PATH="/path/to/your/file"
-FILE_KEY="your-desired-file-key"
 ACCESS_KEY="your-access-key-id"
 SECRET_KEY="your-secret-access-key"
 REGION="your-region-name"
+EMAIL="your-email@example.com"
+DIRECTORY_PATH="/path/to/your/specified/folder"
 
-# Export credentials (optional if not already configured globally)
+# Export AWS credentials (optional if not already configured globally)
 export AWS_ACCESS_KEY_ID=${ACCESS_KEY}
 export AWS_SECRET_ACCESS_KEY=${SECRET_KEY}
 export AWS_DEFAULT_REGION=${REGION}
 
-# Upload the file
-aws s3 cp "${FILE_PATH}" s3://"${BUCKET_NAME}"/"${FILE_KEY}" --endpoint-url "${ENDPOINT_URL}"
+# Find .bak files in the specified directory
+FILES=($(find "${DIRECTORY_PATH}" -type f -name "*.bak"))
 
-echo "File ${FILE_PATH} uploaded to ${BUCKET_NAME} as ${FILE_KEY}"
+# Check if files are found
+if [ ${#FILES[@]} -eq 0 ]; then
+    echo "No .bak files found in ${DIRECTORY_PATH}."
+    exit 0
+fi
+
+# Flag to track upload success
+ALL_UPLOADS_SUCCESSFUL=1
+
+# Loop through files and upload each one
+for FILE_PATH in "${FILES[@]}"; do
+    FILE_KEY=$(basename "${FILE_PATH}")
+
+    # Attempt to upload the file
+    if aws s3 cp "${FILE_PATH}" s3://"${BUCKET_NAME}"/"${FILE_KEY}" --endpoint-url "${ENDPOINT_URL}"; then
+        echo "File ${FILE_PATH} uploaded successfully."
+    else
+        echo "Failed to upload ${FILE_PATH}."
+        ALL_UPLOADS_SUCCESSFUL=0
+        break # Exit the loop on the first failure
+    fi
+done
+
+# Check if all uploads were successful
+if [ ${ALL_UPLOADS_SUCCESSFUL} -eq 1 ]; then
+    echo "All files uploaded successfully. Deleting local files."
+    # Delete the files
+    for FILE_PATH in "${FILES[@]}"; do
+        rm "${FILE_PATH}"
+    done
+else
+    echo "Upload failed. Sending an email."
+    # Send an email notification
+    echo "At least one file failed to upload. Please check the logs." | mail -s "Upload to S3 failed" "${EMAIL}"
+fi
