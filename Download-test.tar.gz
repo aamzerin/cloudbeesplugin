@@ -1,0 +1,35 @@
+#!/bin/bash
+
+# Check if the parameter is provided
+if [ "$#" -ne 1 ]; then
+    echo "Usage: $0 <text-to-filter-by>"
+    exit 1
+fi
+
+# The text to filter filenames by
+FILTER_TEXT="$1"
+
+# Your S3 bucket name
+BUCKET_NAME="your-bucket-name"
+
+# AWS CLI profile name
+AWS_PROFILE="your-profile-name"
+
+# S3-compatible service endpoint URL, uncomment and set if necessary
+# ENDPOINT_URL="https://your-s3-compatible-service.com"
+
+# Directory to save the downloaded files
+DOWNLOAD_DIR="./downloaded_files"
+
+# Make sure the download directory exists
+mkdir -p "$DOWNLOAD_DIR"
+
+# List files in the bucket and filter by the provided text
+# Uncomment and modify --endpoint-url if using a S3-compatible service
+aws s3api list-objects --bucket "$BUCKET_NAME" --query 'Contents[].[Key]' --output text --profile "$AWS_PROFILE" | grep "$FILTER_TEXT" | while read -r file_key; do
+    echo "Downloading $file_key..."
+    # Uncomment and modify --endpoint-url if using a S3-compatible service
+    aws s3 cp "s3://$BUCKET_NAME/$file_key" "$DOWNLOAD_DIR/$file_key" --profile "$AWS_PROFILE" # --endpoint-url "$ENDPOINT_URL"
+done
+
+echo "Download completed."
