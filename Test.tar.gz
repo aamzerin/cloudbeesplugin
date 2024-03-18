@@ -43,6 +43,31 @@ done
 # Check if all uploads were successful
 if [ ${ALL_UPLOADS_SUCCESSFUL} -eq 1 ]; then
     echo "All files uploaded successfully. Deleting local files."
+
+    # Assuming all files have been uploaded successfully
+    
+    # List and sort only .bak files by date, keeping the 48 most recent
+    MOST_RECENT_FILES=$(aws s3api list-objects-v2 --bucket "${BUCKET_NAME}" --query "Contents[?ends_with(Key, '.bak')].[Key]" --output text | sort -k1,1 | tail -n 48)
+    
+    # Convert sorted file list to an array
+    readarray -t SORTED_FILES <<< "$MOST_RECENT_FILES"
+    
+    # List all .bak files
+    ALL_FILES=$(aws s3api list-objects-v2 --bucket "${BUCKET_NAME}" --query "Contents[?ends_with(Key, '.bak')].[Key]" --output text)
+    
+    # Convert all file list to an array
+    readarray -t ALL_FILES_ARR <<< "$ALL_FILES"
+    
+    # Loop through all .bak files and delete if not in the 48 most recent
+    for FILE_KEY in "${ALL_FILES_ARR[@]}"; do
+        if [[ ! " ${SORTED_FILES[*]} " =~ " ${FILE_KEY} " ]]; then
+            echo "Deleting old file: ${FILE_KEY}"
+            aws s3api delete-object --bucket "${BUCKET_NAME}" --key "${FILE_KEY}"
+        fi
+    done
+    
+    echo "Old files deleted. Only the 48 most recent .bak files are kept in the bucket."
+
     # Delete the files
     for FILE_PATH in "${FILES[@]}"; do
         rm "${FILE_PATH}"
