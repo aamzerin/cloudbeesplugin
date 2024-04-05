@@ -1,0 +1,56 @@
+Using an encrypted Ansible Vault file in a shell script without decrypting it to disk involves dynamically decrypting the vault file and using the decrypted content directly within your script. This approach helps maintain the confidentiality of the sensitive data within the vault file. 
+
+Here's a step-by-step approach to achieve this:
+
+### 1. Ensure Dependencies Are Installed
+
+- **Ansible**: Ensure Ansible is installed in your environment as it provides the `ansible-vault` command.
+- **A parser tool**: Depending on the format of your data (YAML, JSON), ensure you have a command-line tool installed for parsing the content, like `jq` for JSON or a Python one-liner for YAML.
+
+### 2. Decrypt and Use the Vault File Dynamically
+
+The general idea is to use `ansible-vault view` to decrypt the vault file and then pipe its content to the rest of your script for immediate use. 
+
+Here’s how you could do it:
+
+#### Example with a YAML Vault File
+
+Assuming the vault file (`secrets.yml`) structure looks like this:
+```yaml
+username: myuser
+password: mypassword
+```
+
+You can use the following script to dynamically decrypt and read values:
+
+```bash
+#!/bin/bash
+
+# Path to your encrypted Ansible Vault file
+vault_file="path/to/secrets.yml"
+
+# Use ansible-vault to decrypt and get the content
+decrypted_content=$(ansible-vault view $vault_file --vault-password-file /path/to/vault_password_file)
+
+# Parse the YAML content. 
+# This example uses Python to parse YAML as it's more universally available.
+# Replace 'username' and 'password' with your actual keys
+username=$(echo "$decrypted_content" | python3 -c "import sys, yaml; print(yaml.safe_load(sys.stdin)['username'])")
+password=$(echo "$decrypted_content" | python3 -c "import sys, yaml; print(yaml.safe_load(sys.stdin)['password'])")
+
+# Now, you can use $username and $password in your script
+echo "Username: $username"
+echo "Password: $password"
+
+# Example usage
+# curl -u "$username:$password" https://example.com/secure-endpoint
+```
+
+### Notes:
+
+- **Security**: This method keeps your secrets encrypted on disk and decrypts them only in memory while the script is running. However, ensure that your script does not inadvertently expose these secrets through logs or error messages.
+- **Vault Password File**: The script assumes you're using a vault password file (`--vault-password-file`). Ensure this file is securely managed. Alternatively, you could use other authentication methods supported by `ansible-vault`, such as prompting for the password.
+- **Error Handling**: Add appropriate error handling, especially for the decryption process, to manage cases where decryption might fail (e.g., due to an incorrect password).
+- **Python for YAML Parsing**: This script uses Python for parsing YAML content because it's widely available. If your environment uses JSON or another format that can be more easily parsed with tools like `jq`, adjust the parsing method accordingly.
+
+This approach allows you to seamlessly integrate encrypted Ansible vault files into shell scripts, leveraging Ansible's encryption to securely manage sensitive data without exposing it in plaintext.
