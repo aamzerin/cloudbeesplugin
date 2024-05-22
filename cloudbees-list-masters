@@ -1,0 +1,19 @@
+import hudson.model.Computer
+import jenkins.model.Jenkins
+
+// Get all computer objects, which represent all nodes including the master
+def allComputers = Jenkins.instance.computers
+
+// Filter the list to only include online masters
+def onlineMasters = allComputers.findAll { computer ->
+    // Check if the computer is online
+    computer.isOnline() &&
+    // Check if the computer is a master, which might be indicated by the 'master' label
+    // or by being an instance of Jenkins (as the main Jenkins instance runs on the master)
+    (computer.displayName == "master" || computer.node == Jenkins.instance)
+}
+
+// Print the names of the online masters
+onlineMasters.each { computer ->
+    println("Online Master: ${computer.displayName}")
+}
