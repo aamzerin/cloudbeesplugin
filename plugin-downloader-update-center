@@ -1,0 +1,70 @@
+#!/bin/bash
+
+# Check if the input file is provided
+if [ -z "$1" ]; then
+  echo "Usage: $0 <plugins-list-file>"
+  exit 1
+fi
+
+PLUGINS_FILE=$1
+
+# CloudBees update center URL for Jenkins version 2.141.2.2-1.1
+UPDATE_CENTER_URL="file:./update-center.json"
+
+# Directory to store downloaded plugins
+DOWNLOAD_DIR="plugins"
+
+# Create download directory if it does not exist
+mkdir -p $DOWNLOAD_DIR
+
+# Download the update center data
+echo "Fetching update center data..."
+curl -L -o update-center.json "$UPDATE_CENTER_URL"
+if [ $? -ne 0 ]; then
+  echo "Failed to fetch update center data"
+  exit 1
+fi
+
+# Function to get the download URL of the specific plugin version
+get_plugin_url() {
+  PLUGIN_NAME=$1
+  VERSION=$(jq -r --arg PLUGIN_NAME "$PLUGIN_NAME" '.plugins[$PLUGIN_NAME].version' update-center.json)
+  if [ "$VERSION" != "null" ]; then
+    echo "https://updates.jenkins.io/download/plugins/$PLUGIN_NAME/$VERSION/$PLUGIN_NAME.hpi"
+  else
+    echo ""
+  fi
+}
+
+# Read the plugins list file line by line
+while IFS= read -r PLUGIN; do
+  # Trim any leading or trailing whitespace
+  PLUGIN=$(echo $PLUGIN | xargs)
+  
+  # Skip empty lines or lines starting with #
+  if [ -z "$PLUGIN" ] || [[ "$PLUGIN" == \#* ]]; then
+    continue
+  fi
+
+  # Get the plugin download URL
+  PLUGIN_URL=$(get_plugin_url "$PLUGIN")
+  if [ -z "$PLUGIN_URL" ]; then
+    echo "Failed to find plugin $PLUGIN in the update center"
+    continue
+  fi
+
+  # Download the plugin
+  echo "Downloading $PLUGIN from $PLUGIN_URL..."
+  curl -L -o "$DOWNLOAD_DIR/$PLUGIN.hpi" "$PLUGIN_URL"
+  
+  if [ $? -ne 0 ]; then
+    echo "Failed to download $PLUGIN"
+  else
+    echo "$PLUGIN downloaded successfully"
+  fi
+done < "$PLUGINS_FILE"
+
+# Cleanup
+rm update-center.json
+
+echo "All plugins downloaded to $DOWNLOAD_DIR"
