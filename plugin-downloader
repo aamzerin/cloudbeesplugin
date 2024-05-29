@@ -1,0 +1,44 @@
+#!/bin/bash
+
+# Check if the input file is provided
+if [ -z "$1" ]; then
+  echo "Usage: $0 <plugins-list-file>"
+  exit 1
+fi
+
+PLUGINS_FILE=$1
+
+# Jenkins update center URL
+UPDATE_CENTER_URL="https://updates.jenkins.io/latest"
+
+# Directory to store downloaded plugins
+DOWNLOAD_DIR="plugins"
+
+# Create download directory if it does not exist
+mkdir -p $DOWNLOAD_DIR
+
+# Read the plugins list file line by line
+while IFS= read -r PLUGIN; do
+  # Trim any leading or trailing whitespace
+  PLUGIN=$(echo $PLUGIN | xargs)
+  
+  # Skip empty lines or lines starting with #
+  if [ -z "$PLUGIN" ] || [[ "$PLUGIN" == \#* ]]; then
+    continue
+  fi
+
+  # Construct the plugin download URL
+  PLUGIN_URL="$UPDATE_CENTER_URL/$PLUGIN.hpi"
+
+  # Download the plugin
+  echo "Downloading $PLUGIN..."
+  curl -L -o "$DOWNLOAD_DIR/$PLUGIN.hpi" "$PLUGIN_URL"
+  
+  if [ $? -ne 0 ]; then
+    echo "Failed to download $PLUGIN"
+  else
+    echo "$PLUGIN downloaded successfully"
+  fi
+done < "$PLUGINS_FILE"
+
+echo "All plugins downloaded to $DOWNLOAD_DIR"
