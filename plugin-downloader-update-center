@@ -8,8 +8,8 @@ fi
 
 PLUGINS_FILE=$1
 
-# CloudBees update center URL for Jenkins version 2.141.2.2-1.1
-UPDATE_CENTER_URL="file:./update-center.json"
+# Jenkins update center URL
+UPDATE_CENTER_URL="https://updates.jenkins.io/update-center.actual.json"
 
 # Directory to store downloaded plugins
 DOWNLOAD_DIR="plugins"
@@ -36,6 +36,49 @@ get_plugin_url() {
   fi
 }
 
+# Function to get the dependencies of a plugin
+get_plugin_dependencies() {
+  PLUGIN_NAME=$1
+  jq -r --arg PLUGIN_NAME "$PLUGIN_NAME" '.plugins[$PLUGIN_NAME].dependencies[]?.name' update-center.json
+}
+
+# Set to keep track of downloaded plugins to avoid duplicates
+declare -A DOWNLOADED_PLUGINS
+
+# Function to download a plugin and its dependencies
+download_plugin_and_dependencies() {
+  PLUGIN_NAME=$1
+
+  # Skip if the plugin has already been downloaded
+  if [[ ${DOWNLOADED_PLUGINS[$PLUGIN_NAME]} ]]; then
+    return
+  fi
+
+  # Get the plugin download URL
+  PLUGIN_URL=$(get_plugin_url "$PLUGIN_NAME")
+  if [ -z "$PLUGIN_URL" ]; then
+    echo "Failed to find plugin $PLUGIN_NAME in the update center"
+    return
+  fi
+
+  # Download the plugin
+  echo "Downloading $PLUGIN_NAME from $PLUGIN_URL..."
+  curl -L -o "$DOWNLOAD_DIR/$PLUGIN_NAME.hpi" "$PLUGIN_URL"
+  
+  if [ $? -ne 0 ]; then
+    echo "Failed to download $PLUGIN_NAME"
+  else
+    echo "$PLUGIN_NAME downloaded successfully"
+    DOWNLOADED_PLUGINS[$PLUGIN_NAME]=1
+  fi
+
+  # Download dependencies
+  DEPENDENCIES=$(get_plugin_dependencies "$PLUGIN_NAME")
+  for DEP in $DEPENDENCIES; do
+    download_plugin_and_dependencies "$DEP"
+  done
+}
+
 # Read the plugins list file line by line
 while IFS= read -r PLUGIN; do
   # Trim any leading or trailing whitespace
@@ -46,22 +89,8 @@ while IFS= read -r PLUGIN; do
     continue
   fi
 
-  # Get the plugin download URL
-  PLUGIN_URL=$(get_plugin_url "$PLUGIN")
-  if [ -z "$PLUGIN_URL" ]; then
-    echo "Failed to find plugin $PLUGIN in the update center"
-    continue
-  fi
-
-  # Download the plugin
-  echo "Downloading $PLUGIN from $PLUGIN_URL..."
-  curl -L -o "$DOWNLOAD_DIR/$PLUGIN.hpi" "$PLUGIN_URL"
-  
-  if [ $? -ne 0 ]; then
-    echo "Failed to download $PLUGIN"
-  else
-    echo "$PLUGIN downloaded successfully"
-  fi
+  # Download the plugin and its dependencies
+  download_plugin_and_dependencies "$PLUGIN"
 done < "$PLUGINS_FILE"
 
 # Cleanup
