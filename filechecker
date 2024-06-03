@@ -25,8 +25,11 @@ if [ ! -f "$TXT_FILE" ]; then
 fi
 
 # Read each line from the text file
-while IFS= read -r line
+while IFS= read -r line || [ -n "$line" ]
 do
+  # Trim any extra whitespace or newline characters
+  line=$(echo "$line" | tr -d '\r\n')
+  
   # Construct the full file path
   FILE_PATH="$DIRECTORY/$line.hpi"
   
