@@ -1,0 +1,39 @@
+#!/bin/bash
+
+# Check if the correct number of arguments are provided
+if [ "$#" -ne 2 ]; then
+  echo "Usage: $0 /path/to/directory /path/to/filelist.txt"
+  exit 1
+fi
+
+# Directory containing the .hpi files
+DIRECTORY="$1"
+
+# Text file containing the list of names
+TXT_FILE="$2"
+
+# Check if the directory exists
+if [ ! -d "$DIRECTORY" ]; then
+  echo "Directory $DIRECTORY does not exist."
+  exit 1
+fi
+
+# Check if the text file exists
+if [ ! -f "$TXT_FILE" ]; then
+  echo "File $TXT_FILE does not exist."
+  exit 1
+fi
+
+# Read each line from the text file
+while IFS= read -r line
+do
+  # Construct the full file path
+  FILE_PATH="$DIRECTORY/$line.hpi"
+  
+  # Check if the file exists
+  if [ -f "$FILE_PATH" ]; then
+    echo "$line.hpi exists in the directory."
+  else
+    echo "$line.hpi does not exist in the directory."
+  fi
+done < "$TXT_FILE"
