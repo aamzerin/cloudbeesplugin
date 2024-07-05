@@ -1,8 +1,10 @@
 import jenkins.model.Jenkins
 import com.cloudbees.hudson.plugins.folder.AbstractFolder
+import java.text.SimpleDateFormat
 
 // Replace this list with your folder names
 def folderNames = ['folder1', 'folder2', 'folder3']
+def dateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss")
 
 def findMostRecentBuild(folder) {
     def mostRecentBuild = null
@@ -25,16 +27,26 @@ def findMostRecentBuild(folder) {
     return mostRecentBuild
 }
 
+def folderBuildMap = [:]
+
 folderNames.each { folderName ->
     def folder = Jenkins.instance.getItem(folderName)
     if (folder != null && folder instanceof com.cloudbees.hudson.plugins.folder.Folder) {
         def mostRecentBuild = findMostRecentBuild(folder)
         if (mostRecentBuild != null) {
-            println("Folder: ${folderName}, Most Recent Build: ${mostRecentBuild.getTime()}")
+            folderBuildMap[folderName] = dateFormat.format(mostRecentBuild.getTime())
         } else {
-            println("Folder: ${folderName}, No builds found.")
+            folderBuildMap[folderName] = null
         }
     } else {
-        println("Folder '${folderName}' not found.")
+        folderBuildMap[folderName] = null
     }
 }
+
+def pythonMapString = "folder_build_dates = {\n"
+folderBuildMap.each { key, value ->
+    pythonMapString += "    '${key}': '${value}',\n"
+}
+pythonMapString = pythonMapString[0..-3] + "\n}"
+
+println(pythonMapString)
