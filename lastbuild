@@ -4,30 +4,36 @@ import com.cloudbees.hudson.plugins.folder.AbstractFolder
 // Replace this list with your folder names
 def folderNames = ['folder1', 'folder2', 'folder3']
 
-def processFolder(folder) {
+def findMostRecentBuild(folder) {
+    def mostRecentBuild = null
     def jobs = folder.getItems()
     jobs.each { item ->
         if (item instanceof com.cloudbees.hudson.plugins.folder.AbstractFolder) {
             // If item is a folder, process it recursively
-            println("Processing folder: ${item.name}")
-            processFolder(item)
+            def subfolderRecentBuild = findMostRecentBuild(item)
+            if (subfolderRecentBuild != null && (mostRecentBuild == null || subfolderRecentBuild.getTime() > mostRecentBuild.getTime())) {
+                mostRecentBuild = subfolderRecentBuild
+            }
         } else {
             // If item is a job, get the last build time
             def lastBuild = item.getLastBuild()
-            if (lastBuild != null) {
-                println("  Job: ${item.fullName}, Last Build: ${lastBuild.getTime()}")
-            } else {
-                println("  Job: ${item.fullName}, No builds found.")
+            if (lastBuild != null && (mostRecentBuild == null || lastBuild.getTime() > mostRecentBuild.getTime())) {
+                mostRecentBuild = lastBuild
             }
         }
     }
+    return mostRecentBuild
 }
 
 folderNames.each { folderName ->
     def folder = Jenkins.instance.getItem(folderName)
     if (folder != null && folder instanceof com.cloudbees.hudson.plugins.folder.Folder) {
-        println("Folder: ${folderName}")
-        processFolder(folder)
+        def mostRecentBuild = findMostRecentBuild(folder)
+        if (mostRecentBuild != null) {
+            println("Folder: ${folderName}, Most Recent Build: ${mostRecentBuild.getTime()}")
+        } else {
+            println("Folder: ${folderName}, No builds found.")
+        }
     } else {
         println("Folder '${folderName}' not found.")
     }
