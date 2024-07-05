@@ -1,0 +1,19 @@
+import jenkins.model.Jenkins
+
+// Replace 'your-folder-name' with the name of your folder
+def folderName = 'your-folder-name'
+def folder = Jenkins.instance.getItem(folderName)
+
+if (folder != null && folder instanceof com.cloudbees.hudson.plugins.folder.Folder) {
+    def jobs = folder.getItems()
+    jobs.each { job ->
+        def lastBuild = job.getLastBuild()
+        if (lastBuild != null) {
+            println("Job: ${job.name}, Last Build: ${lastBuild.getTime()}")
+        } else {
+            println("Job: ${job.name}, No builds found.")
+        }
+    }
+} else {
+    println("Folder '${folderName}' not found.")
+}
