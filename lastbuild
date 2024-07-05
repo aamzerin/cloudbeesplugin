@@ -1,21 +1,33 @@
 import jenkins.model.Jenkins
+import com.cloudbees.hudson.plugins.folder.AbstractFolder
 
 // Replace this list with your folder names
 def folderNames = ['folder1', 'folder2', 'folder3']
 
+def processFolder(folder) {
+    def jobs = folder.getItems()
+    jobs.each { item ->
+        if (item instanceof com.cloudbees.hudson.plugins.folder.AbstractFolder) {
+            // If item is a folder, process it recursively
+            println("Processing folder: ${item.name}")
+            processFolder(item)
+        } else {
+            // If item is a job, get the last build time
+            def lastBuild = item.getLastBuild()
+            if (lastBuild != null) {
+                println("  Job: ${item.fullName}, Last Build: ${lastBuild.getTime()}")
+            } else {
+                println("  Job: ${item.fullName}, No builds found.")
+            }
+        }
+    }
+}
+
 folderNames.each { folderName ->
     def folder = Jenkins.instance.getItem(folderName)
     if (folder != null && folder instanceof com.cloudbees.hudson.plugins.folder.Folder) {
-        def jobs = folder.getItems()
         println("Folder: ${folderName}")
-        jobs.each { job ->
-            def lastBuild = job.getLastBuild()
-            if (lastBuild != null) {
-                println("  Job: ${job.name}, Last Build: ${lastBuild.getTime()}")
-            } else {
-                println("  Job: ${job.name}, No builds found.")
-            }
-        }
+        processFolder(folder)
     } else {
         println("Folder '${folderName}' not found.")
     }
