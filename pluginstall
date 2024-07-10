@@ -1,0 +1,26 @@
+def pluginList = ['plugin1', 'plugin2', 'plugin3']
+
+def instance = Jenkins.getInstance()
+def pm = instance.getPluginManager()
+def uc = instance.getUpdateCenter()
+
+pluginList.each { plugin ->
+    if (!pm.getPlugin(plugin)) {
+        def pluginInstance = uc.getPlugin(plugin)
+        if (pluginInstance) {
+            def installFuture = pluginInstance.deploy()
+            while (!installFuture.isDone()) {
+                println("Waiting for plugin ${plugin} to install...")
+                sleep(3000)
+            }
+            println("Installed ${plugin}")
+        } else {
+            println("Plugin ${plugin} not found in Update Center")
+        }
+    } else {
+        println("Plugin ${plugin} is already installed")
+    }
+}
+
+instance.save()
+instance.restart()
