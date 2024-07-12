@@ -1,0 +1,52 @@
+import requests
+import xml.etree.ElementTree as ET
+import base64
+
+# Configuration
+SOURCE_JENKINS_URL = "http://source-jenkins-url"
+TARGET_JENKINS_URL = "http://target-jenkins-url"
+SOURCE_JENKINS_USER = "source-jenkins-user"
+SOURCE_JENKINS_API_TOKEN = "source-jenkins-api-token"
+TARGET_JENKINS_USER = "target-jenkins-user"
+TARGET_JENKINS_API_TOKEN = "target-jenkins-api-token"
+
+# Headers for basic authentication
+source_auth = base64.b64encode(f"{SOURCE_JENKINS_USER}:{SOURCE_JENKINS_API_TOKEN}".encode()).decode()
+target_auth = base64.b64encode(f"{TARGET_JENKINS_USER}:{TARGET_JENKINS_API_TOKEN}".encode()).decode()
+headers_source = {
+    'Authorization': f'Basic {source_auth}'
+}
+headers_target = {
+    'Authorization': f'Basic {target_auth}'
+}
+
+def get_jobs(url, headers):
+    response = requests.get(f"{url}/api/xml?tree=jobs[name]", headers=headers)
+    response.raise_for_status()
+    root = ET.fromstring(response.content)
+    jobs = [job.find('name').text for job in root.findall('job')]
+    return jobs
+
+def get_credentials(url, headers, job_name):
+    response = requests.get(f"{url}/job/{job_name}/credentials/store/system/domain/_/api/xml", headers=headers)
+    response.raise_for_status()
+    return response.content
+
+def create_credentials(url, headers, job_name, credentials_xml):
+    response = requests.post(f"{url}/job/{job_name}/credentials/store/system/domain/_/createCredentials", headers=headers, data=credentials_xml)
+    response.raise_for_status()
+    return response.content
+
+def migrate_credentials(source_url, target_url, headers_source, headers_target):
+    jobs = get_jobs(source_url, headers_source)
+    for job in jobs:
+        print(f"Migrating credentials for job: {job}")
+        try:
+            credentials_xml = get_credentials(source_url, headers_source, job)
+            create_credentials(target_url, headers_target, job, credentials_xml)
+            print(f"Credentials migrated for job: {job}")
+        except requests.exceptions.HTTPError as e:
+            print(f"Failed to migrate credentials for job: {job}. Error: {e}")
+
+# Main script execution
+migrate_credentials(SOURCE_JENKINS_URL, TARGET_JENKINS_URL, headers_source, headers_target)
