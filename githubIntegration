@@ -1,0 +1,61 @@
+import jwt
+import time
+import requests
+
+# Replace these values with your app's details
+app_id = 'YOUR_GITHUB_APP_ID'
+installation_id = 'YOUR_INSTALLATION_ID'
+private_key = """-----BEGIN RSA PRIVATE KEY-----
+YOUR_PRIVATE_KEY_HERE
+-----END RSA PRIVATE KEY-----"""
+
+# Step 1: Generate the JWT token
+def generate_jwt(app_id, private_key):
+    payload = {
+        'iat': int(time.time()),
+        'exp': int(time.time()) + (10 * 60),
+        'iss': app_id
+    }
+    jwt_token = jwt.encode(payload, private_key, algorithm='RS256')
+    return jwt_token
+
+# Step 2: Exchange JWT for an installation access token
+def get_installation_access_token(jwt_token, installation_id):
+    url = f"https://api.github.com/app/installations/{installation_id}/access_tokens"
+    headers = {
+        "Authorization": f"Bearer {jwt_token}",
+        "Accept": "application/vnd.github.v3+json"
+    }
+    response = requests.post(url, headers=headers)
+    if response.status_code == 201:
+        token = response.json().get("token")
+        return token
+    else:
+        raise Exception(f"Failed to get access token: {response.status_code} {response.text}")
+
+# Step 3: Use the installation access token to make an API request
+def make_authenticated_request(token, api_url):
+    headers = {
+        "Authorization": f"token {token}",
+        "Accept": "application/vnd.github.v3+json"
+    }
+    response = requests.get(api_url, headers=headers)
+    return response.json()
+
+if __name__ == "__main__":
+    try:
+        # Generate JWT
+        jwt_token = generate_jwt(app_id, private_key)
+        
+        # Get Installation Access Token
+        access_token = get_installation_access_token(jwt_token, installation_id)
+        
+        # Use the access token to make an API request
+        api_url = 'https://api.github.com/repos/YOUR_ORG/YOUR_REPO'
+        response_data = make_authenticated_request(access_token, api_url)
+        
+        # Print the response
+        print(response_data)
+    
+    except Exception as e:
+        print(f"An error occurred: {e}")
