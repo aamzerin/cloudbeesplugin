@@ -2,25 +2,43 @@ pipeline {
     agent { label 'operations-center' }
     parameters {
         string(name: 'MASTER_NAME', defaultValue: 'client-controller-1', description: 'Client Controller Name')
+        string(name: 'NAMESPACE', defaultValue: 'jenkins', description: 'Kubernetes Namespace of the Master')
     }
     environment {
         BACKUP_DIR = "/var/jenkins_home"
         BACKUP_FILE = "backup-${params.MASTER_NAME}-$(date +%F-%H-%M-%S).tar.gz"
         TEMP_PATH = "/tmp/\$BACKUP_FILE"
         NEXUS_URL = "http://nexus.example.com/repository/backups/"
-        NEXUS_CREDENTIALS_ID = "nexus-cred" // Jenkins credential ID for Nexus
+        NEXUS_CREDENTIALS_ID = "nexus-cred" // Jenkins credential ID
     }
     stages {
-        stage('Create Backup on Client Controller') {
+        stage('Identify Master Pod') {
             steps {
                 script {
-                    echo "Executing backup on client controller: ${params.MASTER_NAME}"
-                    def backupCommand = """
-                        tar -czf \$TEMP_PATH -C $BACKUP_DIR .
-                        echo "Backup created: \$TEMP_PATH"
+                    echo "Finding pod for ${params.MASTER_NAME}..."
+                    def podName = sh(script: "kubectl get pods -n ${params.NAMESPACE} -l app=${params.MASTER_NAME} -o jsonpath='{.items[0].metadata.name}'", returnStdout: true).trim()
+                    if (!podName) {
+                        error("No pod found for ${params.MASTER_NAME} in namespace ${params.NAMESPACE}")
+                    }
+                    env.MASTER_POD = podName
+                    echo "Master pod found: ${env.MASTER_POD}"
+                }
+            }
+        }
+        stage('Create Backup') {
+            steps {
+                script {
+                    echo "Creating backup inside pod ${env.MASTER_POD}..."
+                    sh """
+                        kubectl exec -n ${params.NAMESPACE} ${env.MASTER_POD} -- sh -c \\
+                        'echo "Stopping Jenkins..."; 
+                        if supervisorctl status jenkins; then supervisorctl stop jenkins; fi;
+                        echo "Creating backup archive...";
+                        tar -czf ${TEMP_PATH} -C ${BACKUP_DIR} .;
+                        echo "Starting Jenkins...";
+                        supervisorctl start jenkins;
+                        echo "Backup created: ${TEMP_PATH}"'
                     """
-                    jenkins.model.Jenkins.instance.getItemByFullName("${params.MASTER_NAME}")
-                        .getComputer().getChannel().exec(backupCommand)
                 }
             }
         }
@@ -28,17 +46,17 @@ pipeline {
             steps {
                 script {
                     echo "Uploading backup to Nexus..."
-                    def uploadCommand = """
-                        curl -u \$(echo \${NEXUS_CREDENTIALS_ID} | tr ':' ' ') --upload-file \$TEMP_PATH \$NEXUS_URL\$BACKUP_FILE
-                        echo "Backup uploaded successfully!"
+                    sh """
+                        kubectl exec -n ${params.NAMESPACE} ${env.MASTER_POD} -- sh -c \\
+                        'curl -u \$(echo \${NEXUS_CREDENTIALS_ID} | tr ":" " ") --upload-file ${TEMP_PATH} ${NEXUS_URL}${BACKUP_FILE};
+                        echo "Backup uploaded successfully!"'
                     """
-                    jenkins.model.Jenkins.instance.getItemByFullName("${params.MASTER_NAME}")
-                        .getComputer().getChannel().exec(uploadCommand)
                 }
             }
         }
     }
 }
+
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -46,43 +64,61 @@ pipeline {
     agent { label 'operations-center' }
     parameters {
         string(name: 'MASTER_NAME', defaultValue: 'client-controller-1', description: 'Client Controller Name')
+        string(name: 'NAMESPACE', defaultValue: 'jenkins', description: 'Kubernetes Namespace of the Master')
     }
     environment {
         BACKUP_DIR = "/var/jenkins_home"
-        NEXUS_URL = "http://nexus.example.com/repository/backups/"
         BACKUP_FILE = "backup-${params.MASTER_NAME}-latest.tar.gz"
         TEMP_PATH = "/tmp/\$BACKUP_FILE"
-        NEXUS_CREDENTIALS_ID = "nexus-cred" // Jenkins credential ID for Nexus
+        NEXUS_URL = "http://nexus.example.com/repository/backups/"
+        NEXUS_CREDENTIALS_ID = "nexus-cred" // Jenkins credential ID
     }
     stages {
-        stage('Download Backup from Nexus') {
+        stage('Identify Master Pod') {
             steps {
                 script {
-                    echo "Downloading backup from Nexus for ${params.MASTER_NAME}"
-                    def downloadCommand = """
-                        curl -u \$(echo \${NEXUS_CREDENTIALS_ID} | tr ':' ' ') -o \$TEMP_PATH \$NEXUS_URL\$BACKUP_FILE
-                        echo "Backup downloaded: \$TEMP_PATH"
-                    """
-                    jenkins.model.Jenkins.instance.getItemByFullName("${params.MASTER_NAME}")
-                        .getComputer().getChannel().exec(downloadCommand)
+                    echo "Finding pod for ${params.MASTER_NAME}..."
+                    def podName = sh(script: "kubectl get pods -n ${params.NAMESPACE} -l app=${params.MASTER_NAME} -o jsonpath='{.items[0].metadata.name}'", returnStdout: true).trim()
+                    if (!podName) {
+                        error("No pod found for ${params.MASTER_NAME} in namespace ${params.NAMESPACE}")
+                    }
+                    env.MASTER_POD = podName
+                    echo "Master pod found: ${env.MASTER_POD}"
                 }
             }
         }
-        stage('Restore Backup on Client Controller') {
+        stage('Download Backup from Nexus') {
             steps {
                 script {
-                    echo "Restoring backup on ${params.MASTER_NAME}"
-                    def restoreCommand = """
-                        systemctl stop jenkins  # Stop Jenkins before restoring
-                        tar -xzf \$TEMP_PATH -C $BACKUP_DIR
-                        systemctl start jenkins  # Restart Jenkins
-                        echo "Restore complete!"
+                    echo "Downloading backup inside pod ${env.MASTER_POD}..."
+                    sh """
+                        kubectl exec -n ${params.NAMESPACE} ${env.MASTER_POD} -- sh -c \\
+                        'curl -u \$(echo \${NEXUS_CREDENTIALS_ID} | tr ":" " ") -o ${TEMP_PATH} ${NEXUS_URL}${BACKUP_FILE}'
                     """
-                    jenkins.model.Jenkins.instance.getItemByFullName("${params.MASTER_NAME}")
-                        .getComputer().getChannel().exec(restoreCommand)
+                }
+            }
+        }
+        stage('Restore Backup') {
+            steps {
+                script {
+                    echo "Restoring backup on ${params.MASTER_NAME}..."
+                    sh """
+                        kubectl exec -n ${params.NAMESPACE} ${env.MASTER_POD} -- sh -c \\
+                        'if [ -f ${TEMP_PATH} ]; then
+                            echo "Stopping Jenkins...";
+                            if supervisorctl status jenkins; then supervisorctl stop jenkins; fi;
+                            echo "Extracting backup...";
+                            tar -xzf ${TEMP_PATH} -C ${BACKUP_DIR};
+                            echo "Starting Jenkins...";
+                            supervisorctl start jenkins;
+                            echo "Restore complete!";
+                        else
+                            echo "Backup file not found!";
+                            exit 1;
+                        fi'
+                    """
                 }
             }
         }
     }
 }
-
