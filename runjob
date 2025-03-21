@@ -1,0 +1,12 @@
+// Remplace "nom-du-job" par le nom exact de ton job Jenkins
+def jobName = "nom-du-job"
+def job = Jenkins.instance.getItemByFullName(jobName)
+
+if (job) {
+    // Tu peux aussi ajouter des paramètres ici si nécessaire
+    def cause = new hudson.model.Cause.UserIdCause()
+    job.scheduleBuild2(0, cause)
+    println "Job '${jobName}' déclenché avec succès."
+} else {
+    println "Job '${jobName}' non trouvé."
+}
