@@ -9,4 +9,6 @@ if (job) {
     println "Job '${jobName}' déclenché avec succès."
 } else {
     println "Job '${jobName}' non trouvé."
-}
+}-Djenkins.model.Jenkins.crumbIssuerProxyCompatibility=true
+-Dhudson.model.DirectoryBrowserSupport.CSP=""
+-Djenkins.security.FrameOptionsExtension=noHeader
