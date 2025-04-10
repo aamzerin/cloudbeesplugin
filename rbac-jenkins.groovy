@@ -1,49 +1,33 @@
-import jenkins.model.*
-import hudson.security.*
-import com.michelin.cio.hudson.plugins.rolestrategy.*
+import com.cloudbees.opscenter.security.roles.*
+import com.cloudbees.opscenter.server.model.*
+import com.cloudbees.hudson.plugins.folder.properties.AuthorizationMatrixProperty
+import com.synopsys.arc.jenkins.plugins.rolestrategy.*
 
-def instance = Jenkins.getInstance()
-def strategy = instance.getAuthorizationStrategy()
+println "=== Rôles globaux RBAC CloudBees ===\n"
 
-if (!(strategy instanceof RoleBasedAuthorizationStrategy)) {
-    println "Role-Based Strategy is not enabled."
+// Récupération du gestionnaire RBAC
+def rbac = Jenkins.instance.getExtensionList(RBAC.class)[0]
+if (rbac == null) {
+    println "RBAC non actif ou non disponible."
     return
 }
 
-// Helper to print roles and their assignments
-def printRoles(roleMap, roleTypeName) {
-    println "\n--- ${roleTypeName} Roles ---"
-    def roles = roleMap.getRoles()
-    roles.each { role ->
-        println "Role: ${role.getName()}"
-        println "  Permissions:"
-        role.getPermissions().each {
-            println "    - ${it.group.title} / ${it.name}"
-        }
-        def sids = roleMap.getSidsForRole(role.getName())
-        println "  Assigned to:"
-        sids.each { sid ->
-            println "    - ${sid}"
-        }
+// Récupère tous les rôles définis
+def roles = rbac.getAllRoles()
+
+roles.each { role ->
+    println "Rôle : ${role.getName()}"
+    println "  Description : ${role.getDescription() ?: 'Aucune'}"
+    println "  Permissions :"
+    role.getPermissions().each { permission ->
+        println "    - ${permission.getId()} (${permission.getName()})"
     }
-}
 
-// Get global roles
-def globalRoleMap = strategy.getRoleMap(RoleBasedAuthorizationStrategy.GLOBAL)
-printRoles(globalRoleMap, "Global")
+    println "  Membres affectés :"
+    def assignments = rbac.getAssignments(role)
+    assignments.each { assignment ->
+        println "    - ${assignment.getSid()} (${assignment.isGroup() ? 'Groupe' : 'Utilisateur'})"
+    }
 
-// Get project roles
-def projectRoleMap = strategy.getRoleMap(RoleBasedAuthorizationStrategy.PROJECT)
-printRoles(projectRoleMap, "Project")
-
-// Get agent (slave) roles
-def agentRoleMap = strategy.getRoleMap(RoleBasedAuthorizationStrategy.SLAVE)
-printRoles(agentRoleMap, "Agent")
-
-// Optional: Folder roles (requires extra plugin support)
-try {
-    def folderRoleMap = strategy.getRoleMap(RoleBasedAuthorizationStrategy.ITEM)
-    printRoles(folderRoleMap, "Folder/Item")
-} catch (MissingPropertyException e) {
-    println "\nFolder roles not supported or not found."
+    println "---------------------------"
 }
