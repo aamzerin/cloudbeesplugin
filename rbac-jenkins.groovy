@@ -1,33 +1,21 @@
-import com.cloudbees.opscenter.security.roles.*
-import com.cloudbees.opscenter.server.model.*
 import com.cloudbees.hudson.plugins.folder.properties.AuthorizationMatrixProperty
-import com.synopsys.arc.jenkins.plugins.rolestrategy.*
+import jenkins.model.Jenkins
+import hudson.security.Permission
 
-println "=== Rôles globaux RBAC CloudBees ===\n"
+println "=== Permissions globales (RBAC CloudBees) ==="
 
-// Récupération du gestionnaire RBAC
-def rbac = Jenkins.instance.getExtensionList(RBAC.class)[0]
-if (rbac == null) {
-    println "RBAC non actif ou non disponible."
-    return
-}
+def strategy = Jenkins.instance.getAuthorizationStrategy()
 
-// Récupère tous les rôles définis
-def roles = rbac.getAllRoles()
+// Vérifie que le système utilise bien une stratégie de type matrix (RBAC activé)
+if (strategy.metaClass.respondsTo(strategy, "getGrantedPermissions")) {
+    def grantedPermissions = strategy.getGrantedPermissions()
 
-roles.each { role ->
-    println "Rôle : ${role.getName()}"
-    println "  Description : ${role.getDescription() ?: 'Aucune'}"
-    println "  Permissions :"
-    role.getPermissions().each { permission ->
-        println "    - ${permission.getId()} (${permission.getName()})"
+    grantedPermissions.each { Permission permission, Set<String> sids ->
+        println "Permission : ${permission.group.title} / ${permission.name}"
+        sids.each { sid ->
+            println "  - Affecté à : ${sid}"
+        }
     }
-
-    println "  Membres affectés :"
-    def assignments = rbac.getAssignments(role)
-    assignments.each { assignment ->
-        println "    - ${assignment.getSid()} (${assignment.isGroup() ? 'Groupe' : 'Utilisateur'})"
-    }
-
-    println "---------------------------"
+} else {
+    println "La stratégie actuelle ne supporte pas 'getGrantedPermissions'."
 }
