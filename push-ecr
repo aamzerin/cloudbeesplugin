@@ -1,0 +1,65 @@
+pipeline {
+    agent {
+        kubernetes {
+            yaml """
+apiVersion: v1
+kind: Pod
+spec:
+  containers:
+  - name: kaniko
+    image: gcr.io/kaniko-project/executor:latest
+    command:
+    - cat
+    tty: true
+  - name: awscli
+    image: amazon/aws-cli:2.15.0
+    command:
+    - cat
+    tty: true
+"""
+            defaultContainer 'awscli'
+        }
+    }
+
+    environment {
+        REGION = 'eu-west-1'
+        ECR_REGISTRY = '<aws_account_id>.dkr.ecr.${REGION}.amazonaws.com'
+        IMAGE_NAME = 'your-ecr-repo'
+        TAG = 'latest'
+    }
+
+    stages {
+        stage('Login to ECR') {
+            steps {
+                container('awscli') {
+                    withCredentials([usernamePassword(credentialsId: 'aws-ecr-creds', usernameVariable: 'AWS_ACCESS_KEY_ID', passwordVariable: 'AWS_SECRET_ACCESS_KEY')]) {
+                        sh """
+                            aws configure set aws_access_key_id $AWS_ACCESS_KEY_ID
+                            aws configure set aws_secret_access_key $AWS_SECRET_ACCESS_KEY
+                            aws configure set default.region $REGION
+
+                            mkdir -p /kaniko/.docker
+                            aws ecr get-login-password --region $REGION | \
+                            docker login --username AWS --password-stdin $ECR_REGISTRY
+
+                            cp ~/.docker/config.json /kaniko/.docker/config.json
+                        """
+                    }
+                }
+            }
+        }
+
+        stage('Build and Push with Kaniko') {
+            steps {
+                container('kaniko') {
+                    sh """
+                        /kaniko/executor \
+                          --context=dir:///workspace \
+                          --dockerfile=Dockerfile \
+                          --destination=${ECR_REGISTRY}/${IMAGE_NAME}:${TAG}
+                    """
+                }
+            }
+        }
+    }
+}
