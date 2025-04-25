@@ -152,6 +152,203 @@ spec:
 
 ---
 
+
+# ⚠️ Detailed Conflict Scenarios: kube2iam vs IRSA in EKS
+
+This document dives deeper into **real-world conflict scenarios** that arise when using `kube2iam` and `IRSA` in parallel, complete with **concrete examples**, **risks**, and **mitigation strategies**.
+
+---
+
+## 🔥 Conflict 1: IRSA Pod Accidentally Uses kube2iam
+
+### ❌ Scenario
+
+A pod is configured to use IRSA:
+
+```yaml
+spec:
+  serviceAccountName: irsa-sa
+```
+
+But:
+- The pod **runs on a node with kube2iam DaemonSet**
+- The pod **has access to 169.254.169.254** (metadata IP)
+
+### 🔎 What Happens
+
+If IRSA is misconfigured (e.g. no valid token or role binding), the AWS SDK inside the container **falls back** to the metadata endpoint and **assumes the kube2iam role**.
+
+### 🔥 Risk
+
+The pod assumes **wrong credentials**, possibly with broader privileges.
+
+### ✅ Mitigation
+
+- Block access to the metadata endpoint in IRSA namespaces:
+
+```yaml
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: block-imds
+  namespace: irsa-ns
+spec:
+  podSelector: {}
+  policyTypes:
+  - Egress
+  egress:
+  - to:
+    - ipBlock:
+        cidr: 169.254.169.254/32
+```
+
+---
+
+## 🔥 Conflict 2: kube2iam Intercepts IRSA Traffic
+
+### ❌ Scenario
+
+kube2iam is installed with:
+
+```bash
+--host.iptables=true
+--auto-discover-base-arn
+```
+
+But no labels are used to restrict routing. As a result, **iptables proxies *all pods’* metadata requests** through kube2iam.
+
+### 🔎 What Happens
+
+Even IRSA-configured pods that have an OIDC identity may:
+- Still route requests via kube2iam
+- Be affected by iptables if IRSA is partially broken
+
+### 🔥 Risk
+
+- kube2iam may assign a fallback IAM role
+- Traffic flows through unnecessary proxy
+
+### ✅ Mitigation
+
+Add `--use-regional-sts` and label-based routing:
+
+```bash
+--iptables=true
+--host.interface=eni+
+--default-role=
+--restrict-to-namespace=true
+--iptables-additional-routes=kube2iam=enabled
+```
+
+Then annotate pods:
+
+```yaml
+metadata:
+  labels:
+    kube2iam: enabled
+```
+
+---
+
+## 🔥 Conflict 3: Role Assumption Logic Conflicts
+
+### ❌ Scenario
+
+A pod is given **both**:
+- IRSA configuration via a service account
+- kube2iam annotation on the pod
+
+```yaml
+metadata:
+  annotations:
+    iam.amazonaws.com/role: arn:aws:iam::123456789012:role/kube2iam-role
+spec:
+  serviceAccountName: irsa-sa
+```
+
+### 🔎 What Happens
+
+- AWS SDK resolves identity using **IRSA first**
+- If IRSA setup fails, fallback is to kube2iam
+- It's unclear which role is in use unless explicitly verified
+
+### 🔥 Risk
+
+- Pod might switch credentials unexpectedly
+- Audit and debug complexity increases
+
+### ✅ Mitigation
+
+Never mix both on the same pod:
+- Use IRSA **or** kube2iam — not both
+- Use namespace-level isolation: `kube2iam-ns`, `irsa-ns`
+
+---
+
+## 🔥 Conflict 4: Broad IAM Trust Policy for IRSA
+
+### ❌ Scenario
+
+IAM trust policy uses wildcard on namespace:
+
+```json
+"Condition": {
+  "StringEquals": {
+    "oidc.eks.<region>.amazonaws.com/id/XYZ:sub": "system:serviceaccount:default:*"
+  }
+}
+```
+
+### 🔎 What Happens
+
+Any pod in the `default` namespace, even unintended ones, can assume the role.
+
+### 🔥 Risk
+
+- **Privilege escalation** across services
+- Easier for compromised pod to laterally move
+
+### ✅ Mitigation
+
+Use precise trust conditions:
+
+```json
+"StringEquals": {
+  "oidc.eks.<region>.amazonaws.com/id/XYZ:sub": "system:serviceaccount:secure-ns:analytics-reader"
+}
+```
+
+---
+
+## 🔍 Diagnostic and Debugging Tools
+
+### Inside the pod
+
+```bash
+aws sts get-caller-identity
+echo $AWS_WEB_IDENTITY_TOKEN_FILE
+curl http://169.254.169.254/latest/meta-data/iam/security-credentials/
+```
+
+Check:
+- Which identity is assumed
+- Whether metadata is accessible
+
+---
+
+## ✅ Final Tips for Conflict-Free Coexistence
+
+| Layer | Recommendation |
+|-------|----------------|
+| Pod setup | Do not combine kube2iam + IRSA in the same pod |
+| Namespace | Separate namespaces for IRSA and kube2iam |
+| Metadata endpoint | Block for IRSA pods via NetworkPolicy |
+| kube2iam config | Use strict iptables and pod labels |
+| IAM role trust | Always restrict by `system:serviceaccount:<ns>:<sa>` |
+| Audit | Use CloudTrail and `aws sts get-caller-identity` for tracing |
+
+---
+
 ## 🧰 Isolation Strategy Table
 
 | Layer | kube2iam Pods | IRSA Pods |
