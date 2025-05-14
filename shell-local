@@ -1,0 +1,11 @@
+{
+  "type": "shell-local",
+  "inline": [
+    "mkdir -p ~/.ssh",
+    "touch ~/.ssh/config",
+    "grep -q 'Host 127.0.0.1' ~/.ssh/config || echo -e '\\nHost 127.0.0.1\\n' >> ~/.ssh/config",
+    "grep -q 'HostkeyAlgorithms' ~/.ssh/config || echo '  HostkeyAlgorithms +ssh-rsa' >> ~/.ssh/config",
+    "grep -q 'PubkeyAcceptedAlgorithms' ~/.ssh/config || echo '  PubkeyAcceptedAlgorithms +ssh-rsa' >> ~/.ssh/config",
+    "chmod 600 ~/.ssh/config"
+  ]
+}
