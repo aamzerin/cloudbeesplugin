@@ -1,0 +1,127 @@
+pipeline {
+  agent none
+
+  environment {
+    ECR_REGISTRY = '123456789012.dkr.ecr.eu-west-1.amazonaws.com'
+    IMAGE_NAME = 'myapp'
+    IMAGE_TAG = 'latest'
+    REPO = "${ECR_REGISTRY}/${IMAGE_NAME}"
+  }
+
+  stages {
+
+    stage('Build amd64') {
+      agent {
+        kubernetes {
+          label 'kaniko-amd64'
+          defaultContainer 'kaniko'
+          nodeSelector 'kubernetes.io/arch=amd64'
+          yaml """
+apiVersion: v1
+kind: Pod
+spec:
+  containers:
+  - name: kaniko
+    image: gcr.io/kaniko-project/executor:latest
+    command: ["/busybox/cat"]
+    tty: true
+    volumeMounts:
+    - name: kaniko-secret
+      mountPath: /kaniko/.docker
+  volumes:
+  - name: kaniko-secret
+    projected:
+      sources:
+      - serviceAccountToken:
+          path: token
+          audience: api
+          expirationSeconds: 3600
+"""
+        }
+      }
+      steps {
+        container('kaniko') {
+          sh '''
+            /kaniko/executor \
+              --context `pwd` \
+              --dockerfile `pwd`/Dockerfile \
+              --destination ${REPO}:${IMAGE_TAG}-amd64
+          '''
+        }
+      }
+    }
+
+    stage('Build arm64') {
+      agent {
+        kubernetes {
+          label 'kaniko-arm64'
+          defaultContainer 'kaniko'
+          nodeSelector 'kubernetes.io/arch=arm64'
+          yaml """
+apiVersion: v1
+kind: Pod
+spec:
+  containers:
+  - name: kaniko
+    image: gcr.io/kaniko-project/executor:latest
+    command: ["/busybox/cat"]
+    tty: true
+    volumeMounts:
+    - name: kaniko-secret
+      mountPath: /kaniko/.docker
+  volumes:
+  - name: kaniko-secret
+    projected:
+      sources:
+      - serviceAccountToken:
+          path: token
+          audience: api
+          expirationSeconds: 3600
+"""
+        }
+      }
+      steps {
+        container('kaniko') {
+          sh '''
+            /kaniko/executor \
+              --context `pwd` \
+              --dockerfile `pwd`/Dockerfile \
+              --destination ${REPO}:${IMAGE_TAG}-arm64
+          '''
+        }
+      }
+    }
+
+    stage('Create multi-arch manifest') {
+      agent {
+        kubernetes {
+          label 'manifest-tool'
+          defaultContainer 'manifest'
+          nodeSelector 'kubernetes.io/arch=amd64'
+          yaml """
+apiVersion: v1
+kind: Pod
+spec:
+  containers:
+  - name: manifest
+    image: docker.io/estesp/manifest-tool:latest
+    command: ["cat"]
+    tty: true
+"""
+        }
+      }
+      steps {
+        container('manifest') {
+          sh '''
+            aws ecr get-login-password --region eu-west-1 | docker login --username AWS --password-stdin ${ECR_REGISTRY}
+
+            manifest-tool push from-args \
+              --platforms linux/amd64,linux/arm64 \
+              --template ${REPO}:${IMAGE_TAG}-ARCH \
+              --target ${REPO}:${IMAGE_TAG}
+          '''
+        }
+      }
+    }
+  }
+}
