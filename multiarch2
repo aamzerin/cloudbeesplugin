@@ -1,0 +1,96 @@
+pipeline {
+  agent none
+  environment {
+    REGISTRY = "123456789012.dkr.ecr.eu-west-1.amazonaws.com"
+    IMAGE = "${REGISTRY}/myapp"
+  }
+
+  stages {
+    stage('Build amd64') {
+      agent {
+        kubernetes {
+          label 'kaniko-amd64'
+          defaultContainer 'kaniko'
+          nodeSelector 'kubernetes.io/arch=amd64'
+          yaml """
+apiVersion: v1
+kind: Pod
+spec:
+  containers:
+    - name: kaniko
+      image: gcr.io/kaniko-project/executor:latest
+      command: ["/busybox/cat"]
+      tty: true
+      volumeMounts:
+        - name: docker-config
+          mountPath: /kaniko/.docker
+  volumes:
+    - name: docker-config
+      emptyDir: {}
+"""
+        }
+      }
+      steps {
+        container('kaniko') {
+          sh '''
+            /kaniko/executor \
+              --context . \
+              --dockerfile Dockerfile \
+              --destination $IMAGE:amd64
+          '''
+        }
+      }
+    }
+
+    stage('Build arm64') {
+      agent {
+        kubernetes {
+          label 'kaniko-arm64'
+          defaultContainer 'kaniko'
+          nodeSelector 'kubernetes.io/arch=arm64'
+          yaml """ (same as above) """
+        }
+      }
+      steps {
+        container('kaniko') {
+          sh '''
+            /kaniko/executor \
+              --context . \
+              --dockerfile Dockerfile \
+              --destination $IMAGE:arm64
+          '''
+        }
+      }
+    }
+
+    stage('Create manifest with CRANE') {
+      agent {
+        kubernetes {
+          label 'crane'
+          defaultContainer 'crane'
+          yaml """
+apiVersion: v1
+kind: Pod
+spec:
+  containers:
+    - name: crane
+      image: gcr.io/go-containerregistry/crane:debug
+      command: ['cat']
+      tty: true
+"""
+        }
+      }
+      steps {
+        container('crane') {
+          sh '''
+            crane auth login $REGISTRY -u AWS -p $(aws ecr get-login-password)
+            crane manifest append \
+              --platform linux/amd64=$IMAGE:amd64 \
+              --platform linux/arm64=$IMAGE:arm64 \
+              --tag $IMAGE:latest
+          '''
+        }
+      }
+    }
+  }
+}
