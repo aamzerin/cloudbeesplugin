@@ -107,3 +107,61 @@ if (job == null) {
 } else {
     println "Pipeline job already exists: $jobName"
 }
+
+---------
+
+import com.cloudbees.opscenter.server.model.*
+import jenkins.model.*
+import hudson.model.*
+import org.jenkinsci.plugins.workflow.job.*
+import org.jenkinsci.plugins.workflow.cps.*
+
+def controllerName = "client-1" // Changez selon le nom exact de votre client controller
+def jobName = "example-pipeline"
+
+def managedMaster = Jenkins.instance.getAllItems(ManagedMaster).find { it.name == controllerName }
+
+if (managedMaster == null) {
+    println "Managed master '${controllerName}' not found"
+    return
+}
+
+if (!managedMaster.channel) {
+    println "Managed master '${controllerName}' is not online"
+    return
+}
+
+// Execute remotely on the client controller
+managedMaster.channel.call(new hudson.remoting.Callable<Void, Exception>() {
+    @Override
+    Void call() throws Exception {
+        def jenkins = jenkins.model.Jenkins.instance
+        def job = jenkins.getItem(jobName)
+        if (job == null) {
+            println "Creating pipeline job '${jobName}'..."
+            def pipelineJob = new org.jenkinsci.plugins.workflow.job.WorkflowJob(jenkins, jobName)
+
+            def flowDefinition = new org.jenkinsci.plugins.workflow.cps.CpsFlowDefinition(
+                '''
+                pipeline {
+                    agent any
+                    stages {
+                        stage('Hello') {
+                            steps {
+                                echo 'Hello from managed controller'
+                            }
+                        }
+                    }
+                }
+                ''', true)
+
+            pipelineJob.setDefinition(flowDefinition)
+            pipelineJob.save()
+            jenkins.reload()
+            println "Job '${jobName}' created successfully"
+        } else {
+            println "Job '${jobName}' already exists"
+        }
+        return null
+    }
+})
