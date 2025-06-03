@@ -205,3 +205,40 @@ managedMaster.channel.call(new hudson.remoting.Callable<Void, Exception>() {
     }
 })
 
+
+
+// Replace with your actual values
+def clientControllerName = "my-client-controller"
+def jobName = "example-pipeline-job"
+def pipelineScript = """
+pipeline {
+    agent any
+    stages {
+        stage('Hello') {
+            steps {
+                echo 'Hello from the client controller!'
+            }
+        }
+    }
+}
+"""
+
+// Get the Client Controller item (a CJOC ManagedMaster object)
+def ccItem = Jenkins.instance.getItem(clientControllerName)
+if (!(ccItem instanceof com.cloudbees.opscenter.server.model.ManagedMaster)) {
+    throw new Exception("Client controller '${clientControllerName}' not found.")
+}
+
+def ccInstance = ccItem.getOwner().getJenkins()
+
+// Use Groovy sandbox to avoid problems with unsafe code
+def job = new org.jenkinsci.plugins.workflow.job.WorkflowJob(ccInstance, jobName)
+def defn = new org.jenkinsci.plugins.workflow.cps.CpsFlowDefinition(pipelineScript, true)
+job.setDefinition(defn)
+ccInstance.reload() // optional: refresh config
+ccInstance.add(job, jobName)
+
+println "Pipeline job '${jobName}' created in client controller '${clientControllerName}'"
+
+
+
