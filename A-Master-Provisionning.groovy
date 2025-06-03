@@ -108,137 +108,47 @@ if (job == null) {
     println "Pipeline job already exists: $jobName"
 }
 
----------
 
-import com.cloudbees.opscenter.server.model.*
-import jenkins.model.*
-import hudson.model.*
-import org.jenkinsci.plugins.workflow.job.*
-import org.jenkinsci.plugins.workflow.cps.*
+-----
 
-def controllerName = "client-1" // Changez selon le nom exact de votre client controller
-def jobName = "example-pipeline"
 
-def managedMaster = Jenkins.instance.getAllItems(ManagedMaster).find { it.name == controllerName }
+import com.cloudbees.opscenter.server.model.ManagedMaster
+import org.jenkinsci.plugins.workflow.job.WorkflowJob
+import org.jenkinsci.plugins.workflow.cps.CpsFlowDefinition
 
-if (managedMaster == null) {
-    println "Managed master '${controllerName}' not found"
+def controllerName = "NOM_DU_CLIENT_CONTROLLER" // change ça
+
+def mm = Jenkins.instance.getAllItems(ManagedMaster).find { it.name == controllerName }
+
+if (mm == null) {
+    throw new Exception("Client controller '${controllerName}' non trouvé")
+}
+
+def jenkins = mm.getOwner().getJenkins()
+def jobName = "mon-job-auto"
+
+if (jenkins.getItem(jobName) != null) {
+    println "Job '${jobName}' existe déjà dans le client controller '${controllerName}'"
     return
 }
 
-if (!managedMaster.channel) {
-    println "Managed master '${controllerName}' is not online"
-    return
-}
-
-// Execute remotely on the client controller
-managedMaster.channel.call(new hudson.remoting.Callable<Void, Exception>() {
-    @Override
-    Void call() throws Exception {
-        def jenkins = jenkins.model.Jenkins.instance
-        def job = jenkins.getItem(jobName)
-        if (job == null) {
-            println "Creating pipeline job '${jobName}'..."
-            def pipelineJob = new org.jenkinsci.plugins.workflow.job.WorkflowJob(jenkins, jobName)
-
-            def flowDefinition = new org.jenkinsci.plugins.workflow.cps.CpsFlowDefinition(
-                '''
-                pipeline {
-                    agent any
-                    stages {
-                        stage('Hello') {
-                            steps {
-                                echo 'Hello from managed controller'
-                            }
-                        }
-                    }
-                }
-                ''', true)
-
-            pipelineJob.setDefinition(flowDefinition)
-            pipelineJob.save()
-            jenkins.reload()
-            println "Job '${jobName}' created successfully"
-        } else {
-            println "Job '${jobName}' already exists"
-        }
-        return null
-    }
-})
-
-
-
-
-
-
-managedMaster.channel.call(new hudson.remoting.Callable<Void, Exception>() {
-    @Override
-    Void call() throws Exception {
-        def jenkins = jenkins.model.Jenkins.instance
-        def job = jenkins.getItem("example-pipeline")
-        if (job == null) {
-            def pipelineJob = new org.jenkinsci.plugins.workflow.job.WorkflowJob(jenkins, "example-pipeline")
-
-            def flowDefinition = new org.jenkinsci.plugins.workflow.cps.CpsFlowDefinition(
-                '''
-                pipeline {
-                    agent any
-                    stages {
-                        stage('Hello') {
-                            steps {
-                                echo 'Hello from managed controller'
-                            }
-                        }
-                    }
-                }
-                ''', true)
-
-            pipelineJob.setDefinition(flowDefinition)
-            pipelineJob.save()
-        }
-        return null
-    }
-
-    @Override
-    void checkRoles(org.jenkinsci.remoting.RoleChecker checker) throws SecurityException {
-        // Required by Jenkins remoting, can be left empty
-    }
-})
-
-
-
-// Replace with your actual values
-def clientControllerName = "my-client-controller"
-def jobName = "example-pipeline-job"
-def pipelineScript = """
+def pipelineScript = '''
 pipeline {
     agent any
     stages {
-        stage('Hello') {
+        stage('Start') {
             steps {
-                echo 'Hello from the client controller!'
+                echo 'Job créé depuis CJOC'
             }
         }
     }
 }
-"""
+'''
 
-// Get the Client Controller item (a CJOC ManagedMaster object)
-def ccItem = Jenkins.instance.getItem(clientControllerName)
-if (!(ccItem instanceof com.cloudbees.opscenter.server.model.ManagedMaster)) {
-    throw new Exception("Client controller '${clientControllerName}' not found.")
-}
+def job = new WorkflowJob(jenkins, jobName)
+job.setDefinition(new CpsFlowDefinition(pipelineScript, true))
+jenkins.add(job, jobName)
 
-def ccInstance = ccItem.getOwner().getJenkins()
-
-// Use Groovy sandbox to avoid problems with unsafe code
-def job = new org.jenkinsci.plugins.workflow.job.WorkflowJob(ccInstance, jobName)
-def defn = new org.jenkinsci.plugins.workflow.cps.CpsFlowDefinition(pipelineScript, true)
-job.setDefinition(defn)
-ccInstance.reload() // optional: refresh config
-ccInstance.add(job, jobName)
-
-println "Pipeline job '${jobName}' created in client controller '${clientControllerName}'"
-
+println "✅ Job '${jobName}' créé avec succès dans '${controllerName}'"
 
 
