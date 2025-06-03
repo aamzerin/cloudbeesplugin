@@ -165,3 +165,43 @@ managedMaster.channel.call(new hudson.remoting.Callable<Void, Exception>() {
         return null
     }
 })
+
+
+
+
+
+
+managedMaster.channel.call(new hudson.remoting.Callable<Void, Exception>() {
+    @Override
+    Void call() throws Exception {
+        def jenkins = jenkins.model.Jenkins.instance
+        def job = jenkins.getItem("example-pipeline")
+        if (job == null) {
+            def pipelineJob = new org.jenkinsci.plugins.workflow.job.WorkflowJob(jenkins, "example-pipeline")
+
+            def flowDefinition = new org.jenkinsci.plugins.workflow.cps.CpsFlowDefinition(
+                '''
+                pipeline {
+                    agent any
+                    stages {
+                        stage('Hello') {
+                            steps {
+                                echo 'Hello from managed controller'
+                            }
+                        }
+                    }
+                }
+                ''', true)
+
+            pipelineJob.setDefinition(flowDefinition)
+            pipelineJob.save()
+        }
+        return null
+    }
+
+    @Override
+    void checkRoles(org.jenkinsci.remoting.RoleChecker checker) throws SecurityException {
+        // Required by Jenkins remoting, can be left empty
+    }
+})
+
