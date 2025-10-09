@@ -1,0 +1,15 @@
+# 1) Assume le rôle cible (compte 961…)
+CREDS_JSON=$(aws sts assume-role \
+  --role-arn arn:aws:iam::961423816130:role/secops/automation/ASSUMEROLE-IAM-AUTOMATION \
+  --role-session-name CFW \
+  --duration-seconds 3600 \
+  --output json)
+
+# 2) Exporter les variables d'env du rôle assumé
+export AWS_ACCESS_KEY_ID=$(echo "$CREDS_JSON" | jq -r '.Credentials.AccessKeyId')
+export AWS_SECRET_ACCESS_KEY=$(echo "$CREDS_JSON" | jq -r '.Credentials.SecretAccessKey')
+export AWS_SESSION_TOKEN=$(echo "$CREDS_JSON" | jq -r '.Credentials.SessionToken')
+
+# 3) (Cross-account) être explicite sur le registre
+aws ecr get-login-password --region eu-west-1 --registry-ids 961423816130 \
+| docker login --username AWS --password-stdin 961423816130.dkr.ecr.eu-west-1.amazonaws.com
