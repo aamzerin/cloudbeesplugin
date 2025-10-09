@@ -1,0 +1,24 @@
+# Use the official rootless BuildKit image
+FROM moby/buildkit:rootless
+
+# Match your Jenkins UID/GID if needed (set via --build-arg)
+ARG UID=1000
+ARG GID=1000
+
+# Create jenkins user/group and home
+RUN set -eux; \
+    addgroup -g "${GID}" jenkins; \
+    adduser -D -h /home/jenkins -u "${UID}" -G jenkins jenkins; \
+    mkdir -p /home/jenkins/.local/share/buildkit /home/jenkins/.local/run/buildkit; \
+    # Make sure common BuildKit paths are writable
+    chown -R jenkins:jenkins /home/jenkins /var/lib/buildkit /run /tmp
+
+# Run as jenkins
+USER jenkins
+
+# Rootless buildkitd listens on a user-writable unix socket
+ENV XDG_RUNTIME_DIR=/home/jenkins/.local/run
+ENV BUILDKITD_FLAGS=--addr=unix:///home/jenkins/.local/run/buildkit/buildkitd.sock
+
+# Start the daemon
+ENTRYPOINT ["buildkitd"]
