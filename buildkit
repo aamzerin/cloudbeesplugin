@@ -1,25 +1,26 @@
-# Use rootless BuildKit image (best for non-root Jenkins usage)
-FROM moby/buildkit:rootless
+FROM moby/buildkit:buildx-stable-1
 
-# Pass Jenkins UID/GID dynamically
 ARG UID=1000
 ARG GID=1000
 
-# Install required tools for user/group creation
 USER root
-RUN apk add --no-cache shadow bash
 
-# Create jenkins user and home
+# Install minimal required tools for user management
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends passwd procps && \
+    rm -rf /var/lib/apt/lists/*
+
+# Create Jenkins group and user using system tools
 RUN set -eux; \
-    groupadd -g ${GID} jenkins; \
-    useradd -m -d /home/jenkins -u ${UID} -g ${GID} jenkins; \
+    groupadd -g "${GID}" jenkins; \
+    useradd -m -d /home/jenkins -u "${UID}" -g "${GID}" -s /bin/bash jenkins; \
     mkdir -p /home/jenkins/.local/share/buildkit /home/jenkins/.local/run/buildkit; \
     chown -R jenkins:jenkins /home/jenkins /var/lib/buildkit /run /tmp
 
 # Switch to Jenkins user
 USER jenkins
 
-# Environment for rootless buildkit
+# Rootless-friendly runtime variables
 ENV XDG_RUNTIME_DIR=/home/jenkins/.local/run
 ENV BUILDKITD_FLAGS=--addr=unix:///home/jenkins/.local/run/buildkit/buildkitd.sock
 
