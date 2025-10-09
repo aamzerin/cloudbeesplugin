@@ -4,24 +4,14 @@ ARG UID=1000
 ARG GID=1000
 
 USER root
-
-# Install minimal required tools for user management
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends passwd procps && \
-    rm -rf /var/lib/apt/lists/*
-
-# Create Jenkins group and user using system tools
 RUN set -eux; \
-    groupadd -g "${GID}" jenkins; \
-    useradd -m -d /home/jenkins -u "${UID}" -g "${GID}" -s /bin/bash jenkins; \
+    # create group and user entries without useradd/groupadd
+    echo "jenkins:x:${GID}:" >> /etc/group; \
+    echo "jenkins:x:${UID}:${GID}:Jenkins:/home/jenkins:/bin/sh" >> /etc/passwd; \
     mkdir -p /home/jenkins/.local/share/buildkit /home/jenkins/.local/run/buildkit; \
-    chown -R jenkins:jenkins /home/jenkins /var/lib/buildkit /run /tmp
+    chown -R ${UID}:${GID} /home/jenkins /var/lib/buildkit /run /tmp
 
-# Switch to Jenkins user
 USER jenkins
-
-# Rootless-friendly runtime variables
 ENV XDG_RUNTIME_DIR=/home/jenkins/.local/run
 ENV BUILDKITD_FLAGS=--addr=unix:///home/jenkins/.local/run/buildkit/buildkitd.sock
-
 ENTRYPOINT ["buildkitd"]
