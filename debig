@@ -1,0 +1,25 @@
+# Disable CDK’s version and telemetry checks (the hanging calls)
+export CDK_DISABLE_VERSION_CHECK=1
+export CDK_DISABLE_TELEMETRY=1
+
+# Prevent SDK from probing EC2 IMDS (avoids 7-minute delays)
+export AWS_EC2_METADATA_DISABLED=true
+
+# Use only regional endpoints
+export AWS_REGION=eu-west-1
+export AWS_DEFAULT_REGION=eu-west-1
+export AWS_STS_REGIONAL_ENDPOINTS=regional
+export AWS_S3_US_EAST_1_REGIONAL_ENDPOINT=regional
+
+# Ensure your AWS profile is used
+export AWS_PROFILE=account_cfw_nprd
+export AWS_SDK_LOAD_CONFIG=1
+
+# Optional: shorten retries to fail fast
+export AWS_MAX_ATTEMPTS=2
+export AWS_CLIENT_TIMEOUT=5000
+export AWS_METADATA_SERVICE_TIMEOUT=1000
+export AWS_METADATA_SERVICE_NUM_ATTEMPTS=1
+
+# Give Node some headroom
+export NODE_OPTIONS="--max-old-space-size=2048"
