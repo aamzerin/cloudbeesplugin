@@ -1,0 +1,33 @@
+# Use your profile; load config/credentials
+export AWS_PROFILE=account_cfw_nprd
+export AWS_SDK_LOAD_CONFIG=1
+export AWS_REGION=eu-west-1
+
+# Force regional endpoints (avoid global STS)
+export AWS_STS_REGIONAL_ENDPOINTS=regional
+export AWS_S3_US_EAST_1_REGIONAL_ENDPOINT=regional
+
+# Stop IMDS probing (kills 7-minute stalls if IMDS is blocked)
+export AWS_EC2_METADATA_DISABLED=true
+
+# Block CDK’s external version/telemetry calls (often to blocked CDNs)
+export CDK_DISABLE_VERSION_CHECK=1
+export CDK_DISABLE_TELEMETRY=1
+
+# Make failures fast (no long retries)
+export AWS_MAX_ATTEMPTS=2
+export AWS_CLIENT_TIMEOUT=5000
+export AWS_METADATA_SERVICE_TIMEOUT=1000
+export AWS_METADATA_SERVICE_NUM_ATTEMPTS=1
+
+# Give Node more headroom (avoid exit 137 in tight containers)
+export NODE_OPTIONS="--max-old-space-size=2048"  # raise if you can
+
+# (If you’re behind a corporate proxy)
+# export HTTPS_PROXY=http://proxy.mycorp:8080
+# export HTTP_PROXY=http://proxy.mycorp:8080
+# export NO_PROXY=169.254.169.254,localhost,127.0.0.1,.amazonaws.com
+
+# Run with deep logs to confirm endpoints and providers used
+AWS_SDK_LOG_LEVEL=trace CDK_DEBUG=true \
+cdk bootstrap --profile account_ --region eu-west-1 --verbose
