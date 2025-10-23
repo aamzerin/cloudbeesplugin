@@ -1,13 +1,12 @@
-# 1) Copie ton CA dans le conteneur
-docker cp cacert.pem buildx_buildkit_arm-builder0:/etc/ssl/certs/cacert.pem
+# Crée un dossier local de certificats dans BuildKit rootless
+docker exec buildx_buildkit_arm-builder0 sh -lc "mkdir -p ~/.local/share/ca-certificates"
 
-# 2) Ajoute-le au bundle système (pas d'update-ca-certificates ici)
+# Copie ton CA dans ce dossier
+docker cp cacert.pem buildx_buildkit_arm-builder0:/home/user/.local/share/ca-certificates/cacert.pem
+
+# Concatène le CA avec la trust chain lue par Go TLS
 docker exec buildx_buildkit_arm-builder0 sh -lc \
-  'if [ -f /etc/ssl/certs/ca-certificates.crt ]; then \
-      cat /etc/ssl/certs/cacert.pem >> /etc/ssl/certs/ca-certificates.crt; \
-    else \
-      cat /etc/ssl/certs/cacert.pem >> /etc/ssl/cert.pem; \
-    fi'
+  "cat ~/.local/share/ca-certificates/cacert.pem >> /etc/ssl/cert.pem 2>/dev/null || true"
 
-# 3) Redémarre BuildKit (pour être sûr)
+# Redémarre BuildKit pour recharger les certificats
 docker restart buildx_buildkit_arm-builder0
