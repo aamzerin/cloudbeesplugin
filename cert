@@ -1,0 +1,13 @@
+# 1) Copie ton CA dans le conteneur
+docker cp cacert.pem buildx_buildkit_arm-builder0:/etc/ssl/certs/cacert.pem
+
+# 2) Ajoute-le au bundle système (pas d'update-ca-certificates ici)
+docker exec buildx_buildkit_arm-builder0 sh -lc \
+  'if [ -f /etc/ssl/certs/ca-certificates.crt ]; then \
+      cat /etc/ssl/certs/cacert.pem >> /etc/ssl/certs/ca-certificates.crt; \
+    else \
+      cat /etc/ssl/certs/cacert.pem >> /etc/ssl/cert.pem; \
+    fi'
+
+# 3) Redémarre BuildKit (pour être sûr)
+docker restart buildx_buildkit_arm-builder0
